@@ -44,13 +44,13 @@ npm run dev
 ## Fases del proyecto
 
 - [x] **Fase 0** — Scaffolding del monorepo
-- [ ] **Fase 1** — Ingesta de datos (API-Football): ligas, equipos, fixtures históricos
-- [ ] **Fase 2** — Esquema de base de datos (leagues, teams, fixtures, stats, elo, odds, predictions)
-- [ ] **Fase 3** — Feature engineering + dataset histórico de entrenamiento
-- [ ] **Fase 4** — Entrenamiento y evaluación del modelo ML (LightGBM + calibración + backtesting/ROI)
-- [ ] **Fase 5** — Servicio de inferencia (`POST /predict`)
-- [ ] **Fase 6** — Integración de odds de mercado + cálculo de value bets
-- [ ] **Fase 7** — Frontend: selector de partidos + página de análisis ultra detallado + narrativa Claude
+- [x] **Fase 1** — Ingesta de datos (API-Football): ligas, equipos, fixtures históricos
+- [x] **Fase 2** — Esquema de base de datos (leagues, teams, fixtures, stats, elo, odds, predictions)
+- [x] **Fase 3** — Feature engineering + dataset histórico de entrenamiento
+- [x] **Fase 4** — Entrenamiento y evaluación del modelo ML (LightGBM + calibración; ROI pendiente de odds reales)
+- [x] **Fase 5** — Servicio de inferencia (`POST /predict`)
+- [ ] **Fase 6** — Integración de odds de mercado + cálculo de value bets (requiere `ODDS_API_KEY`)
+- [~] **Fase 7** — Frontend: selector de partidos + análisis ultra detallado (listo; narrativa Claude en modo respaldo hasta tener `ANTHROPIC_API_KEY`)
 - [ ] **Fase 8** — Tracking de desempeño histórico del predictor (accuracy/ROI)
 - [ ] **Fase 9** — Testing, manejo de errores y deployment (Vercel + Railway/Render + Neon)
 
