@@ -12,15 +12,20 @@ implica riesgo financiero — juega con responsabilidad.
 
 ```
 apps/
-  web/         Next.js (frontend + BFF) — interfaz de usuario y narrativa vía Claude
-  ml-service/  FastAPI (Python) — ingesta de datos, feature engineering, entrenamiento e inferencia ML
+  web/         Next.js (frontend + BFF) — interfaz de usuario, consume POST /analysis
+  ml-service/  FastAPI (Python) — ingesta, features, entrenamiento, inferencia y agente de análisis
 ```
 
-- **Datos de partidos/equipos**: API-Football (RapidAPI).
-- **Cuotas de mercado**: The Odds API.
-- **Narrativa "experto en apuestas"**: Anthropic Claude API.
-- **Base de datos**: SQLite en desarrollo (`apps/ml-service/data/predictor.db`), migrable a Postgres
-  (Neon/Supabase) antes de producción — mismo esquema vía SQLAlchemy/Alembic.
+- **Datos de partidos/equipos**: API-Football (api-sports.io directo, no RapidAPI).
+- **Modelo**: LightGBM multiclase calibrado (isotonic), con explicabilidad **SHAP** por predicción.
+- **Cuotas de mercado**: The Odds API (Fase 6).
+- **Decisión de stake**: Kelly Criterion fraccionado sobre el edge modelo-vs-mercado.
+- **Narrativa "experto en apuestas"**: agente **LangGraph** (`predict → explain → odds →
+  [stake] → narrative`) que llama a Claude (`claude-opus-5`) con la tool nativa `web_search`
+  para contexto reciente en partidos aún no jugados. Todo vive en `ml-service`; el frontend solo
+  consume `POST /analysis`.
+- **Base de datos**: **SQLite** (`apps/ml-service/data/predictor.db`) — decisión permanente del
+  proyecto, sin migración a Postgres planeada.
 
 ## Setup local
 
@@ -49,8 +54,8 @@ npm run dev
 - [x] **Fase 3** — Feature engineering + dataset histórico de entrenamiento
 - [x] **Fase 4** — Entrenamiento y evaluación del modelo ML (LightGBM + calibración; ROI pendiente de odds reales)
 - [x] **Fase 5** — Servicio de inferencia (`POST /predict`)
-- [ ] **Fase 6** — Integración de odds de mercado + cálculo de value bets (requiere `ODDS_API_KEY`)
-- [~] **Fase 7** — Frontend: selector de partidos + análisis ultra detallado (listo; narrativa Claude en modo respaldo hasta tener `ANTHROPIC_API_KEY`)
+- [~] **Fase 6** — Odds + value bets: cliente y cálculo de Kelly listos y validados con datos simulados; falta `ODDS_API_KEY` real para activarlo en producción
+- [x] **Fase 7** — Frontend + agente LangGraph (SHAP, staking, narrativa vía Claude con `web_search`); narrativa en modo respaldo hasta tener `ANTHROPIC_API_KEY`
 - [ ] **Fase 8** — Tracking de desempeño histórico del predictor (accuracy/ROI)
 - [ ] **Fase 9** — Testing, manejo de errores y deployment (Vercel + Railway/Render + Neon)
 
