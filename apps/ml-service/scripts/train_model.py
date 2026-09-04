@@ -93,6 +93,7 @@ def main() -> None:
     joblib.dump(
         {
             "model": calibrated_model,
+            "base_model": base_model,
             "features": FEATURE_COLUMNS,
             "categorical": CATEGORICAL,
             "label_names": LABEL_NAMES,

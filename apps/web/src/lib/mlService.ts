@@ -67,3 +67,43 @@ export function predictFixture(fixtureId: number): Promise<PredictResponse> {
 export function listLeagues(): Promise<League[]> {
   return mlFetch(`/leagues`);
 }
+
+export type ShapFeature = { feature: string; impact: number };
+
+export type StakeRecommendation = {
+  label: string;
+  decimal_odds: number;
+  implied_probability: number;
+  model_probability: number;
+  edge: number;
+  is_value_bet: boolean;
+  kelly_fraction_full: number;
+  suggested_stake_pct_bankroll: number;
+};
+
+export type AnalysisResponse = {
+  fixture: {
+    fixture_id: number;
+    league_id: number;
+    league_name: string;
+    country: string;
+    season: number;
+    home_team: string;
+    away_team: string;
+    kickoff_at: string;
+    status: string;
+    venue: string | null;
+  };
+  prediction: PredictResponse;
+  shap_top_features: ShapFeature[];
+  odds: { home: number; draw: number; away: number } | null;
+  stakes: Record<"home" | "draw" | "away", StakeRecommendation> | null;
+  narrative: string;
+};
+
+export function getAnalysis(fixtureId: number): Promise<AnalysisResponse> {
+  return mlFetch(`/analysis`, {
+    method: "POST",
+    body: JSON.stringify({ fixture_id: fixtureId }),
+  });
+}
