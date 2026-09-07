@@ -1,0 +1,55 @@
+Read CLAUDE.md again and inspect the current repository.
+
+Implement PHASE 2 ONLY: domain model, persistence and migrations.
+
+Do NOT start API-FOOTBALL integration yet.
+
+Implement the initial domain/persistence for at least:
+
+- Sport
+- Competition
+- Season
+- Team
+- Player
+- Venue
+- Match
+- StandingSnapshot
+- OddsSnapshot
+- Prediction
+- ModelVersion
+- TrainingRun
+- FeatureValue
+- TrackedCompetition
+- DataAvailability
+- ApiQuotaSnapshot
+- ApiRawSnapshot
+
+Requirements:
+
+- EF Core + SQLite;
+- explicit relationships;
+- proper indexes;
+- unique external IDs where appropriate;
+- nullable reference types;
+- UTC timestamps;
+- migrations;
+- seed only essential reference/test data;
+- no fake sports statistics;
+- repositories or persistence abstractions only where justified;
+- idempotent database setup;
+- unit/integration tests for important mappings and constraints.
+
+Important:
+FeatureValue must include AvailableAt so future anti-data-leakage rules can be enforced.
+
+At completion:
+
+1. compile full .NET solution;
+2. run all tests;
+3. create a clean SQLite database file;
+4. apply migrations successfully;
+5. document the schema;
+6. report important architectural decisions;
+7. STOP.
+
+Do not begin Phase 3.

@@ -1,0 +1,62 @@
+Read CLAUDE.md completely before doing anything.
+
+You are the principal software architect and developer for this project.
+
+Implement PHASE 1 ONLY.
+
+The project is a local sports prediction platform.
+Football will later use API-FOOTBALL as the primary structured provider.
+The user has an API-FOOTBALL PRO subscription, but DO NOT integrate the provider yet in Phase 1.
+
+Before writing code:
+
+1. inspect the directory;
+2. propose the final Phase 1 folder structure;
+3. identify any technical conflict in CLAUDE.md;
+4. explain briefly the implementation plan.
+
+If there are no blocking conflicts, implement Phase 1 completely.
+
+Phase 1 must include:
+
+- .NET solution;
+- Clean Architecture projects:
+  - SportsPredictor.Api
+  - SportsPredictor.Application
+  - SportsPredictor.Domain
+  - SportsPredictor.Infrastructure
+- Next.js + TypeScript frontend;
+- Python FastAPI ML service;
+- SQLite (local file, no database server required);
+- health endpoints for backend and ML service;
+- configuration files;
+- .gitignore;
+- .env.example;
+- initial architecture documentation;
+- minimal tests proving services can start.
+
+Requirements:
+
+- Do not hardcode secrets.
+- Do not implement API-FOOTBALL calls yet.
+- Make architecture compatible with the future API-FOOTBALL ingestion pipeline defined in CLAUDE.md.
+- Compile the complete .NET solution.
+- Run all .NET tests.
+- Run Python tests if created.
+- Verify frontend builds.
+- Do not leave failing tests.
+- Do not use pseudocode as final implementation.
+- Do not start Phase 2.
+
+At completion report:
+
+1. final folder structure;
+2. commands to run backend;
+3. commands to run frontend;
+4. commands to run ML service;
+5. docker compose commands;
+6. tests executed and results;
+7. architectural decisions;
+8. any issues still open.
+
+Then STOP and wait for Phase 2.

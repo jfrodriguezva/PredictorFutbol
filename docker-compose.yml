@@ -1,0 +1,43 @@
+# Optional. Local development does not require Docker — SQLite is a local
+# file and every service can run directly with dotnet run / npm run dev /
+# uvicorn (see README.md). This file is kept for anyone who later prefers
+# to run everything containerized.
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: SportsPredictor.Api/Dockerfile
+    container_name: sportspredictor-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ConnectionStrings__SportsPredictorDb: "Data Source=/data/sportspredictor.db"
+      Frontend__BaseUrl: "http://localhost:3000"
+      ApiFootball__ApiKey: ${API_FOOTBALL_KEY:-}
+      ApiFootball__BaseUrl: ${API_FOOTBALL_BASE_URL:-https://v3.football.api-sports.io}
+    volumes:
+      - sqlite-data:/data
+    ports:
+      - "5000:5000"
+
+  ml:
+    build:
+      context: ./ml
+    container_name: sportspredictor-ml
+    environment:
+      ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+    ports:
+      - "8001:8001"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: sportspredictor-frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:5000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  sqlite-data:

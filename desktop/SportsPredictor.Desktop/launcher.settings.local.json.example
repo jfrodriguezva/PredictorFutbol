@@ -1,0 +1,16 @@
+{
+  "_comment": "Copy to launcher.settings.local.json (gitignored) and adjust the paths to your checkout.",
+  "ApiWorkingDirectory": "C:/path/to/Predictor/backend/SportsPredictor.Api",
+  "ApiExecutable": "dotnet",
+  "ApiArguments": "run --no-launch-profile",
+  "ApiPort": 20050,
+  "DatabasePath": "C:/path/to/Predictor/database/sportspredictor.db",
+  "FrontendWorkingDirectory": "C:/path/to/Predictor/frontend",
+  "FrontendCommand": "C:/Program Files/nodejs/npm.cmd",
+  "FrontendArguments": "run dev",
+  "FrontendPort": 20051,
+  "MlWorkingDirectory": "C:/path/to/Predictor/ml",
+  "MlPythonExecutable": "C:/path/to/Predictor/ml/.venv/Scripts/python.exe",
+  "MlArguments": "-m uvicorn app.main:app --port 8001 --host 127.0.0.1",
+  "MlPort": 8001
+}

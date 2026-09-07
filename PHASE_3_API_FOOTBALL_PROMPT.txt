@@ -1,0 +1,87 @@
+Read CLAUDE.md completely and inspect the current repository.
+
+Implement PHASE 3 ONLY: base API-FOOTBALL integration.
+
+The user has an active API-FOOTBALL PRO subscription.
+
+The API key must come only from:
+
+API_FOOTBALL_KEY
+
+Base URL:
+
+https://v3.football.api-sports.io
+
+Authentication header:
+
+x-apisports-key
+
+NEVER:
+- hardcode the key;
+- print it;
+- persist it;
+- expose it to the frontend;
+- commit it.
+
+Implement:
+
+1. strongly typed ApiFootballOptions;
+2. ApiFootballClient using HttpClientFactory;
+3. authentication handler;
+4. quota/rate-limit header parsing;
+5. persistence of quota snapshots when appropriate;
+6. HTTP 429 handling;
+7. limited exponential backoff;
+8. handling for transient 5xx responses;
+9. CancellationToken support;
+10. cache abstraction + IMemoryCache implementation;
+11. provider health/test connection;
+12. structured error handling;
+13. integration tests using mocked HTTP responses;
+14. one optional real smoke test only when API_FOOTBALL_KEY is configured.
+
+In this phase integrate ONLY:
+
+GET /countries
+GET /leagues
+
+Do not implement:
+- teams;
+- fixtures;
+- standings;
+- players;
+- injuries;
+- odds;
+- predictions.
+
+Rules:
+
+- Inspect real API responses before finalizing DTOs when a real API key is available.
+- Do not invent DTO schemas as final truth.
+- Store external IDs correctly.
+- Read actual quota headers dynamically.
+- Do not hardcode PRO-plan quotas.
+- Cache countries and leagues appropriately.
+- All calls remain server-side.
+
+Add backend endpoints such as:
+
+GET /api/data-sources/api-football/status
+POST /api/data-sources/api-football/test
+GET /api/reference/countries
+GET /api/reference/leagues
+
+Exact routes can vary if architecture suggests better naming, but keep them RESTful.
+
+At completion:
+
+1. compile entire .NET solution;
+2. run every test;
+3. ensure the SQLite database file exists (apply migrations);
+4. start backend;
+5. if API_FOOTBALL_KEY exists, perform a real connection smoke test;
+6. verify countries;
+7. verify leagues;
+8. report quota headers received without exposing secrets;
+9. document configuration;
+10. STOP before Phase 4.

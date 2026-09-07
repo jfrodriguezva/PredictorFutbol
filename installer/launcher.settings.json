@@ -1,0 +1,14 @@
+{
+  "ApiWorkingDirectory": "Api",
+  "ApiExecutable": "SportsPredictor.Api.exe",
+  "ApiArguments": "",
+  "ApiPort": 20050,
+  "FrontendWorkingDirectory": "Frontend",
+  "FrontendCommand": "node",
+  "FrontendArguments": "server.js",
+  "FrontendPort": 20051,
+  "MlWorkingDirectory": "Ml",
+  "MlPythonExecutable": ".venv/Scripts/python.exe",
+  "MlArguments": "-m uvicorn app.main:app --port 8001 --host 127.0.0.1",
+  "MlPort": 8001
+}
