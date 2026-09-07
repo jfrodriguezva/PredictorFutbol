@@ -62,6 +62,9 @@ public class PredictionGenerationServiceTests : IDisposable
 
         public Task<PredictMatch1X2ResultDto> PredictMatch1X2Async(string artifactPath, IReadOnlyDictionary<string, double> features, CancellationToken cancellationToken) =>
             Task.FromResult(ResultToReturn);
+
+        public Task<AnalyzeFootball1X2ResultDto> AnalyzeFootball1X2Async(string artifactPath, IReadOnlyDictionary<string, double> features, AnalyzeFixtureContextDto fixture, AnalyzeOddsDto? odds, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private async Task<(Match match, ModelVersion modelVersion)> SeedMatchAndModelAsync()

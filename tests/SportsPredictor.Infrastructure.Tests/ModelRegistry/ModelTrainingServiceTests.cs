@@ -91,6 +91,9 @@ public class ModelTrainingServiceTests : IDisposable
 
         public Task<PredictMatch1X2ResultDto> PredictMatch1X2Async(string artifactPath, IReadOnlyDictionary<string, double> features, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+
+        public Task<AnalyzeFootball1X2ResultDto> AnalyzeFootball1X2Async(string artifactPath, IReadOnlyDictionary<string, double> features, AnalyzeFixtureContextDto fixture, AnalyzeOddsDto? odds, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     [Fact]

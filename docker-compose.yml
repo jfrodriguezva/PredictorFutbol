@@ -25,6 +25,9 @@ services:
     container_name: sportspredictor-ml
     environment:
       ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      # Used only by POST /analyze/football-1x2's narrative — optional, falls back to a
+      # template without it (see ml/narrative/generate.py).
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "8001:8001"
 

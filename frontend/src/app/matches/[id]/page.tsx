@@ -4,7 +4,7 @@ import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiGet, apiPost, ApiError } from "@/lib/api";
-import type { GeneratePredictionResult, LearnFromMatchResult, Match, Prediction } from "@/lib/types";
+import type { GeneratePredictionResult, LearnFromMatchResult, Match, Prediction, PredictionExplanation } from "@/lib/types";
 
 function pct(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
@@ -17,11 +17,13 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
 
   const [match, setMatch] = useState<Match | null>(null);
   const [predictions, setPredictions] = useState<Prediction[] | null>(null);
+  const [analysis, setAnalysis] = useState<PredictionExplanation | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
   const [learning, setLearning] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
 
   async function loadMatch() {
     try {
@@ -39,10 +41,23 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
     }
   }
 
+  async function loadAnalysis() {
+    try {
+      setAnalysis(await apiGet<PredictionExplanation>(`/api/predictions/${id}/analysis`));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        setAnalysis(null);
+      } else {
+        setError(err instanceof ApiError ? err.message : "Could not reach the backend.");
+      }
+    }
+  }
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional fetch-on-mount
     loadMatch();
     loadPredictions();
+    loadAnalysis();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -108,6 +123,26 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
     }
   }
 
+  async function handleAnalyze() {
+    setAnalyzing(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await apiPost<PredictionExplanation>(`/api/predictions/${id}/analyze`);
+      setAnalysis(result);
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.status === 409
+            ? "No trained model exists yet — train one from the Models page first."
+            : err.message
+          : "Failed to analyze this match.",
+      );
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
   const latestBatch = predictions?.length
     ? predictions.filter((p) => p.predictionDate === predictions[0].predictionDate)
     : [];
@@ -167,6 +202,15 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
             {learning ? "Learning…" : "Learn from this match"}
           </button>
         )}
+
+        <button
+          onClick={handleAnalyze}
+          disabled={analyzing}
+          title="SHAP feature attribution, Kelly-Criterion stake sizing, and a narrative on top of the raw prediction"
+          className="rounded border border-purple-400 px-4 py-2 text-sm text-purple-700 disabled:opacity-50 dark:border-purple-700 dark:text-purple-400"
+        >
+          {analyzing ? "Analyzing…" : "Analizar"}
+        </button>
       </div>
 
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
@@ -212,6 +256,65 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
           </p>
         )}
       </div>
+
+      {analysis && (
+        <div className="mt-8 rounded-lg border border-purple-200 p-4 dark:border-purple-900">
+          <h2 className="text-lg font-medium">Análisis</h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            Generado {new Date(analysis.generatedAt).toLocaleString()} · H {pct(analysis.home)} / D {pct(analysis.draw)} / A{" "}
+            {pct(analysis.away)}
+          </p>
+
+          <h3 className="mt-4 text-sm font-medium text-neutral-700 dark:text-neutral-300">Features más relevantes (SHAP)</h3>
+          <ul className="mt-2 space-y-1 text-sm">
+            {analysis.shapTopFeatures.map((f) => (
+              <li key={f.feature} className="flex justify-between border-b border-neutral-100 py-1 dark:border-neutral-900">
+                <span className="text-neutral-600 dark:text-neutral-400">{f.feature}</span>
+                <span className={f.impact >= 0 ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
+                  {f.impact >= 0 ? "+" : ""}
+                  {f.impact.toFixed(3)}
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          {analysis.stakes && (
+            <>
+              <h3 className="mt-4 text-sm font-medium text-neutral-700 dark:text-neutral-300">Value bets y stake sugerido</h3>
+              <div className="mt-2 grid grid-cols-3 gap-3">
+                {(["home", "draw", "away"] as const).map((outcome) => {
+                  const s = analysis.stakes![outcome];
+                  return (
+                    <div
+                      key={outcome}
+                      className={`rounded-lg border p-3 text-center text-sm ${
+                        s.isValueBet
+                          ? "border-green-500 bg-green-50 dark:bg-green-950/30"
+                          : "border-neutral-200 dark:border-neutral-800"
+                      }`}
+                    >
+                      <p className="text-xs uppercase text-neutral-500">{s.label}</p>
+                      <p className="mt-1 font-semibold">{s.decimalOdds.toFixed(2)}</p>
+                      <p className="mt-1 text-xs text-neutral-500">
+                        edge {s.edge >= 0 ? "+" : ""}
+                        {(s.edge * 100).toFixed(1)}pp
+                      </p>
+                      {s.isValueBet && (
+                        <p className="mt-1 text-xs font-medium text-green-700 dark:text-green-400">
+                          stake {(s.suggestedStakePctBankroll * 100).toFixed(1)}%
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          <h3 className="mt-4 text-sm font-medium text-neutral-700 dark:text-neutral-300">Narrativa</h3>
+          <div className="mt-2 whitespace-pre-wrap text-sm text-neutral-700 dark:text-neutral-300">{analysis.narrative}</div>
+        </div>
+      )}
 
       {predictions && predictions.length > latestBatch.length && (
         <div className="mt-8">

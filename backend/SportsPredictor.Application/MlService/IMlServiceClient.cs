@@ -18,4 +18,16 @@ public interface IMlServiceClient
 
     /// <summary>Loads a saved artifact and scores one real match's current features. This is what backs POST /api/predictions/generate.</summary>
     Task<PredictMatch1X2ResultDto> PredictMatch1X2Async(string artifactPath, IReadOnlyDictionary<string, double> features, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The "expert analyst" explanation on top of a plain prediction: SHAP feature
+    /// attribution, Kelly-Criterion stake sizing (only when <paramref name="odds"/> is
+    /// supplied), and a narrative. Backs POST /api/predictions/{matchId}/analyze.
+    /// </summary>
+    Task<AnalyzeFootball1X2ResultDto> AnalyzeFootball1X2Async(
+        string artifactPath,
+        IReadOnlyDictionary<string, double> features,
+        AnalyzeFixtureContextDto fixture,
+        AnalyzeOddsDto? odds,
+        CancellationToken cancellationToken);
 }

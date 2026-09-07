@@ -17,15 +17,18 @@ namespace SportsPredictor.Api.Controllers;
 public sealed class PredictionsController : ControllerBase
 {
     private readonly IPredictionGenerationService _predictionService;
+    private readonly IPredictionAnalysisService _predictionAnalysisService;
     private readonly IDatasetBuilderService _datasetBuilderService;
     private readonly IModelTrainingService _modelTrainingService;
 
     public PredictionsController(
         IPredictionGenerationService predictionService,
+        IPredictionAnalysisService predictionAnalysisService,
         IDatasetBuilderService datasetBuilderService,
         IModelTrainingService modelTrainingService)
     {
         _predictionService = predictionService;
+        _predictionAnalysisService = predictionAnalysisService;
         _datasetBuilderService = datasetBuilderService;
         _modelTrainingService = modelTrainingService;
     }
@@ -96,6 +99,44 @@ public sealed class PredictionsController : ControllerBase
     {
         var result = await _predictionService.GetAccuracySummaryAsync(modelVersionId, cancellationToken);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// The "expert analyst" explanation for this match: SHAP feature attribution,
+    /// Kelly-Criterion stake sizing (when market odds are available), and a narrative
+    /// (Claude-generated, or template-based without ANTHROPIC_API_KEY configured in
+    /// ml/). Persists a new PredictionExplanation snapshot every call.
+    /// </summary>
+    [HttpPost("{matchId:guid}/analyze")]
+    [ProducesResponseType(typeof(PredictionExplanationDto), StatusCodes.Status201Created)]
+    public async Task<IActionResult> Analyze(Guid matchId, [FromQuery] Guid? modelVersionId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _predictionAnalysisService.AnalyzeMatchAsync(matchId, modelVersionId, cancellationToken);
+            return CreatedAtAction(nameof(GetAnalysis), new { matchId }, result);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Problem(statusCode: StatusCodes.Status409Conflict, title: "No trained model available", detail: ex.Message);
+        }
+        catch (MlServiceException ex)
+        {
+            return Problem(statusCode: StatusCodes.Status502BadGateway, title: "ML service request failed", detail: ex.Message);
+        }
+    }
+
+    /// <summary>The most recently generated analysis for this match, or 404 if Analyze has never been called for it.</summary>
+    [HttpGet("{matchId:guid}/analysis")]
+    [ProducesResponseType(typeof(PredictionExplanationDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAnalysis(Guid matchId, CancellationToken cancellationToken)
+    {
+        var result = await _predictionAnalysisService.GetLatestAnalysisForMatchAsync(matchId, cancellationToken);
+        return result is not null ? Ok(result) : NotFound();
     }
 
     public sealed record LearnFromMatchResultDto(EvaluateMatchResultDto Evaluation, ModelVersionDto NewModelVersion);

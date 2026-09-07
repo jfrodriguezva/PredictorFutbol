@@ -16,5 +16,10 @@ class Settings(BaseSettings):
     service_name: str = "SportsPredictor ML Service"
     service_version: str = "0.1.0"
 
+    # Used only by /analyze/football-1x2 for the Claude-generated narrative — falls
+    # back to a template when unset (see narrative/generate.py). Never used to call
+    # API-FOOTBALL or any other provider directly.
+    anthropic_api_key: str = ""
+
 
 settings = Settings()

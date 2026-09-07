@@ -134,3 +134,61 @@ class PredictGoalsResponse(BaseModel):
     most_likely_home_goals: int
     most_likely_away_goals: int
     most_likely_score_probability: float
+
+
+class AnalyzeFixtureContext(BaseModel):
+    """Match context needed for the narrative — supplied by the caller (the C# backend);
+    this service never looks it up itself. `status` uses API-FOOTBALL's fixture status
+    codes (e.g. "NS", "FT") and controls whether the narrative enables web search."""
+
+    home_team: str
+    away_team: str
+    league_name: str
+    country: str
+    season: str
+    status: str
+
+
+class AnalyzeOddsRequest(BaseModel):
+    home: float
+    draw: float
+    away: float
+
+
+class AnalyzeFootball1X2Request(BaseModel):
+    """Full "expert analyst" explanation on top of a plain /predict/football-1x2 call:
+    SHAP feature attribution, Kelly-Criterion stake sizing (only when `odds` is
+    supplied), and a Claude-generated narrative. Reuses an already-trained artifact —
+    no CSV needed here, same as PredictMatch1X2Request. Entirely stateless: never
+    touches SQLite or API-FOOTBALL directly."""
+
+    artifact_path: str
+    features: dict[str, float] = Field(default_factory=dict)
+    fixture: AnalyzeFixtureContext
+    odds: AnalyzeOddsRequest | None = None
+
+
+class ShapFeatureImpactResponse(BaseModel):
+    feature: str
+    impact: float
+
+
+class StakeRecommendationResponse(BaseModel):
+    label: str
+    decimal_odds: float
+    implied_probability: float
+    model_probability: float
+    edge: float
+    is_value_bet: bool
+    kelly_fraction_full: float
+    suggested_stake_pct_bankroll: float
+
+
+class AnalyzeFootball1X2Response(BaseModel):
+    home: float
+    draw: float
+    away: float
+    shap_top_features: list[ShapFeatureImpactResponse]
+    stakes: dict[str, StakeRecommendationResponse] | None
+    narrative: str
+    analyzed_at_utc: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

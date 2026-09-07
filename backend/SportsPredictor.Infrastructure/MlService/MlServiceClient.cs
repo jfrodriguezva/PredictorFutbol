@@ -124,6 +124,63 @@ public sealed class MlServiceClient : IMlServiceClient
         return new PredictMatch1X2ResultDto(result.Home, result.Draw, result.Away);
     }
 
+    public async Task<AnalyzeFootball1X2ResultDto> AnalyzeFootball1X2Async(
+        string artifactPath,
+        IReadOnlyDictionary<string, double> features,
+        AnalyzeFixtureContextDto fixture,
+        AnalyzeOddsDto? odds,
+        CancellationToken cancellationToken)
+    {
+        var requestBody = new AnalyzeRequestBody(
+            artifactPath,
+            features,
+            new AnalyzeFixtureBody(fixture.HomeTeam, fixture.AwayTeam, fixture.LeagueName, fixture.Country, fixture.Season, fixture.Status),
+            odds is not null ? new AnalyzeOddsBody(odds.Home, odds.Draw, odds.Away) : null);
+
+        using var response = await _httpClient.PostAsJsonAsync("analyze/football-1x2", requestBody, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogError("ML service analysis request failed with status {StatusCode}: {Body}", (int)response.StatusCode, body);
+            throw new MlServiceException($"ML service analysis request failed with status {(int)response.StatusCode}: {body}");
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<AnalyzeFootball1X2ResponseModel>(cancellationToken)
+            ?? throw new MlServiceException("ML service returned an empty analysis response.");
+
+        return new AnalyzeFootball1X2ResultDto(
+            result.Home,
+            result.Draw,
+            result.Away,
+            result.ShapTopFeatures.Select(f => new ShapFeatureImpactDto(f.Feature, f.Impact)).ToList(),
+            result.Stakes?.ToDictionary(
+                kv => kv.Key,
+                kv => new StakeRecommendationDto(
+                    kv.Value.Label, kv.Value.DecimalOdds, kv.Value.ImpliedProbability, kv.Value.ModelProbability,
+                    kv.Value.Edge, kv.Value.IsValueBet, kv.Value.KellyFractionFull, kv.Value.SuggestedStakePctBankroll)),
+            result.Narrative);
+    }
+
+    private sealed record AnalyzeFixtureBody(
+        [property: JsonPropertyName("home_team")] string HomeTeam,
+        [property: JsonPropertyName("away_team")] string AwayTeam,
+        [property: JsonPropertyName("league_name")] string LeagueName,
+        [property: JsonPropertyName("country")] string Country,
+        [property: JsonPropertyName("season")] string Season,
+        [property: JsonPropertyName("status")] string Status);
+
+    private sealed record AnalyzeOddsBody(
+        [property: JsonPropertyName("home")] double Home,
+        [property: JsonPropertyName("draw")] double Draw,
+        [property: JsonPropertyName("away")] double Away);
+
+    private sealed record AnalyzeRequestBody(
+        [property: JsonPropertyName("artifact_path")] string ArtifactPath,
+        [property: JsonPropertyName("features")] IReadOnlyDictionary<string, double> Features,
+        [property: JsonPropertyName("fixture")] AnalyzeFixtureBody Fixture,
+        [property: JsonPropertyName("odds")] AnalyzeOddsBody? Odds);
+
     private sealed record PredictMatchRequestBody(
         [property: JsonPropertyName("artifact_path")] string ArtifactPath,
         [property: JsonPropertyName("features")] IReadOnlyDictionary<string, double> Features);

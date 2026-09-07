@@ -5,6 +5,8 @@ from fastapi import FastAPI, HTTPException
 from app.config import settings
 from app.schemas import (
     AlgorithmResultResponse,
+    AnalyzeFootball1X2Request,
+    AnalyzeFootball1X2Response,
     BacktestSummaryResponse,
     BacktestWindowResponse,
     BenchmarkResultResponse,
@@ -17,12 +19,17 @@ from app.schemas import (
     PredictGoalsResponse,
     PredictMatch1X2Request,
     PredictMatch1X2Response,
+    ShapFeatureImpactResponse,
+    StakeRecommendationResponse,
     TrainFootball1X2Request,
     TrainFootball1X2Response,
 )
 from backtesting.walk_forward import walk_forward_backtest
+from decision.staking import recommend_stakes
 from evaluation import benchmarks as benchmarks_module
 from evaluation.calibration import compute_calibration_report
+from features.shap_explain import top_shap_features
+from narrative.generate import generate_narrative
 from training import football_1x2, goals_poisson
 from training.dataset import load_dataset, prepare_features
 
@@ -200,4 +207,47 @@ def predict_goals(request: PredictGoalsRequest) -> PredictGoalsResponse:
         most_likely_home_goals=summary.most_likely_score[0],
         most_likely_away_goals=summary.most_likely_score[1],
         most_likely_score_probability=summary.most_likely_score_probability,
+    )
+
+
+@app.post("/analyze/football-1x2", response_model=AnalyzeFootball1X2Response)
+def analyze_football_1x2(request: AnalyzeFootball1X2Request) -> AnalyzeFootball1X2Response:
+    """
+    Full "expert analyst" explanation layered on top of the raw H/D/A prediction:
+    SHAP feature attribution (features/shap_explain.py), Kelly-Criterion stake sizing
+    when market odds are supplied (decision/staking.py), and a Claude-generated
+    narrative that falls back to a template without ANTHROPIC_API_KEY
+    (narrative/generate.py). Like /predict/football-1x2, this is entirely stateless —
+    it never touches SQLite or API-FOOTBALL; all match/odds context comes from the
+    caller (the C# backend), which is the only one that persists the result.
+    """
+    try:
+        artifact = football_1x2.load_artifact(request.artifact_path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"Model artifact not found: {request.artifact_path}") from exc
+
+    probabilities = football_1x2.predict_single(artifact, request.features)
+    probs_named = {"home": probabilities["H"], "draw": probabilities["D"], "away": probabilities["A"]}
+    predicted_label = max(probabilities, key=probabilities.get)
+    predicted_index = list(probabilities).index(predicted_label)
+
+    shap_top_features = top_shap_features(artifact, request.features, predicted_index)
+
+    odds_dict = None
+    stakes = None
+    if request.odds is not None:
+        odds_dict = {"home": request.odds.home, "draw": request.odds.draw, "away": request.odds.away}
+        stakes = recommend_stakes(probs_named, odds_dict)
+
+    narrative_text = generate_narrative(
+        request.fixture.model_dump(), {"probabilities": probs_named}, shap_top_features, odds_dict, stakes
+    )
+
+    return AnalyzeFootball1X2Response(
+        home=probs_named["home"],
+        draw=probs_named["draw"],
+        away=probs_named["away"],
+        shap_top_features=[ShapFeatureImpactResponse(**f) for f in shap_top_features],
+        stakes={k: StakeRecommendationResponse(**v) for k, v in stakes.items()} if stakes else None,
+        narrative=narrative_text,
     )

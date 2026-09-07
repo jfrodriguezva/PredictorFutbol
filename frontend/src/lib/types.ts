@@ -64,6 +64,35 @@ export interface LearnFromMatchResult {
   newModelVersion: ModelVersion;
 }
 
+export interface ShapFeature {
+  feature: string;
+  impact: number;
+}
+
+export interface Stake {
+  label: string;
+  decimalOdds: number;
+  impliedProbability: number;
+  modelProbability: number;
+  edge: number;
+  isValueBet: boolean;
+  kellyFractionFull: number;
+  suggestedStakePctBankroll: number;
+}
+
+export interface PredictionExplanation {
+  id: string;
+  matchId: string;
+  modelVersionId: string;
+  generatedAt: string;
+  home: number;
+  draw: number;
+  away: number;
+  shapTopFeatures: ShapFeature[];
+  stakes: Record<"home" | "draw" | "away", Stake> | null;
+  narrative: string;
+}
+
 export interface AccuracySummary {
   totalEvaluated: number;
   correctCount: number;

@@ -1174,3 +1174,33 @@ Al terminar:
 - tests ejecutados;
 - decisiones arquitectónicas;
 - detenerse y esperar Fase 2.
+
+---
+
+# 41. Adición fuera del plan original: análisis "experto" (SHAP + Kelly + narrativa)
+
+No formaba parte de las 18 fases originales de este documento. Se agregó
+portando el agente de análisis de un proyecto Python/Next.js paralelo
+(predicción 1X2 + LangGraph + Claude) sobre esta base, respetando las reglas
+de arquitectura ya establecidas arriba (secciones 1, 8-9, 29):
+
+- `ml/features/shap_explain.py`, `ml/decision/staking.py`,
+  `ml/narrative/generate.py` + `POST /analyze/football-1x2` en `ml/app/main.py`
+  — igual que `/predict/football-1x2`, **enteramente stateless**: nunca toca
+  `sportspredictor.db` ni API-FOOTBALL; recibe features/odds/contexto del
+  partido ya resueltos por C#.
+- `PredictionAnalysisService` (Infrastructure) orquesta: Dataset Builder →
+  ML service → persiste `PredictionExplanation` (nueva entidad, snapshot
+  inmutable igual que `Prediction` — sección 29). Expuesto en
+  `PredictionsController` como `POST /api/predictions/{matchId}/analyze` y
+  `GET /api/predictions/{matchId}/analysis`.
+- **Cuotas de mercado**: se reutiliza `OddsSnapshot` (ya sincronizada desde
+  API-FOOTBALL, Fase 7) en vez de integrar un segundo proveedor de cuotas
+  (el proyecto origen usaba The Odds API) — cero credenciales nuevas, una
+  sola fuente de verdad para odds.
+- **Narrativa**: usa `ANTHROPIC_API_KEY` (nueva variable de entorno, opcional
+  — sin ella cae a una narrativa por plantilla). Nunca se usa para llamar a
+  API-FOOTBALL ni ningún otro proveedor de datos deportivos — solo para
+  redactar el análisis a partir de los datos que el backend ya calculó.
+
+Ver el README ("Análisis 'experto'") para el detalle de uso.

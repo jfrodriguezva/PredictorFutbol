@@ -43,6 +43,7 @@ public static class DependencyInjection
 
         services.AddScoped<IDatasetBuilderService, DatasetBuilderService>();
         services.AddScoped<IPredictionGenerationService, PredictionGenerationService>();
+        services.AddScoped<IPredictionAnalysisService, PredictionAnalysisService>();
         services.AddScoped<IMatchQueryService, MatchQueryService>();
         services.AddSingleton<IProgolOptimizer, ProgolOptimizer>();
 
