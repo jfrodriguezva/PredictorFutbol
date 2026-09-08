@@ -27,7 +27,7 @@ from app.schemas import (
 from backtesting.walk_forward import walk_forward_backtest
 from decision.staking import recommend_stakes
 from evaluation import benchmarks as benchmarks_module
-from evaluation.calibration import compute_calibration_report
+from evaluation.calibration import compute_calibration_report, fit_and_compare_isotonic
 from features.shap_explain import top_shap_features
 from narrative.generate import generate_narrative
 from training import football_1x2, goals_poisson
@@ -98,12 +98,13 @@ def train_football_1x2(request: TrainFootball1X2Request) -> TrainFootball1X2Resp
 @app.post("/evaluate/football-1x2", response_model=EvaluateFootball1X2Response)
 def evaluate_football_1x2(request: EvaluateFootball1X2Request) -> EvaluateFootball1X2Response:
     """
-    Phase 10 (CLAUDE.md sections 26-27): calibration of the selected model, a
-    walk-forward backtest (never a random split), and comparison against the
-    benchmarks that are currently achievable (always-favorite, bookmaker-implied
-    probabilities). Elo and true closing-line benchmarks are deliberately not
-    implemented yet — see docs/football-model.md. This endpoint persists nothing;
-    it only reports numbers for a human to judge the model by.
+    Phase 10 (CLAUDE.md sections 26-27): calibration of the selected model (raw and,
+    when the selected algorithm supports it, isotonic-calibrated for comparison), a
+    walk-forward backtest (never a random split), and comparison against benchmarks
+    (always-favorite, bookmaker-implied, closing-line when the dataset has closing-odds
+    columns). Elo benchmark and API-Football's own predictions are deliberately not
+    implemented yet — see docs/football-model.md. This endpoint persists nothing; it
+    only reports numbers for a human to judge the model by.
     """
     try:
         df = load_dataset(request.csv_content)
@@ -115,12 +116,16 @@ def evaluate_football_1x2(request: EvaluateFootball1X2Request) -> EvaluateFootba
         x_test_scaled = summary.scaler.transform(x_test)
         probabilities = summary.model.predict_proba(x_test_scaled)
         calibration = compute_calibration_report(y_test_idx, probabilities)
+        calibration_after_isotonic = fit_and_compare_isotonic(df, summary)
 
         backtest = walk_forward_backtest(df, n_windows=request.n_windows)
         benchmark_results = [
             benchmarks_module.always_favorite_benchmark(df),
             benchmarks_module.bookmaker_implied_benchmark(df),
         ]
+        closing_line = benchmarks_module.closing_line_benchmark(df)
+        if closing_line is not None:
+            benchmark_results.append(closing_line)
     except ValueError as exc:
         logger.warning("Evaluation request rejected: %s", exc)
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -135,6 +140,20 @@ def evaluate_football_1x2(request: EvaluateFootball1X2Request) -> EvaluateFootba
                 )
                 for b in calibration.bins
             ],
+        ),
+        calibration_after_isotonic=(
+            CalibrationReportResponse(
+                expected_calibration_error=calibration_after_isotonic.expected_calibration_error,
+                bins=[
+                    CalibrationBinResponse(
+                        bin_lower=b.bin_lower, bin_upper=b.bin_upper,
+                        predicted_mean=b.predicted_mean, actual_frequency=b.actual_frequency, count=b.count,
+                    )
+                    for b in calibration_after_isotonic.bins
+                ],
+            )
+            if calibration_after_isotonic is not None
+            else None
         ),
         backtest=BacktestSummaryResponse(
             windows=[

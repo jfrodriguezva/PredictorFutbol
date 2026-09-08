@@ -109,6 +109,17 @@ public sealed class DatasetBuilderService : IDatasetBuilderService
         return await BuildCsvAsync(matches, cancellationToken);
     }
 
+    // Benchmark-only columns (ml/evaluation/benchmarks.py's closing_line_benchmark) —
+    // deliberately NOT in FootballFeatureNames.All: they are the odds captured closest
+    // to kickoff (distinct from the averaged MarketImplied*Probability features), and
+    // the Python side never trains on them, only benchmarks against them.
+    private static readonly string[] ClosingLineColumns =
+    [
+        "closing_market_implied_home_prob",
+        "closing_market_implied_draw_prob",
+        "closing_market_implied_away_prob",
+    ];
+
     private async Task<string> BuildCsvAsync(List<Match> matches, CancellationToken cancellationToken)
     {
         var matchIds = matches.Select(m => m.Id).ToList();
@@ -118,8 +129,15 @@ public sealed class DatasetBuilderService : IDatasetBuilderService
             .GroupBy(f => (f.MatchId, f.FeatureName))
             .ToDictionary(g => g.Key, g => g.OrderByDescending(f => f.CapturedAt).First().NumericValue);
 
+        var oddsByMatch = (await _dbContext.OddsSnapshots
+                .Where(o => matchIds.Contains(o.MatchId) && o.Market == MatchWinnerMarket)
+                .ToListAsync(cancellationToken))
+            .GroupBy(o => o.MatchId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
         var builder = new StringBuilder();
         var headers = new List<string> { "match_id", "match_date_utc", "home_team", "away_team", "home_score", "away_score", "result" };
+        headers.AddRange(ClosingLineColumns);
         headers.AddRange(FootballFeatureNames.All);
         builder.AppendLine(string.Join(",", headers));
 
@@ -137,6 +155,16 @@ public sealed class DatasetBuilderService : IDatasetBuilderService
                 match.AwayScore?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
                 result,
             };
+
+            var matchOdds = oddsByMatch.GetValueOrDefault(match.Id, []);
+            foreach (var selection in new[] { "Home", "Draw", "Away" })
+            {
+                var closing = matchOdds
+                    .Where(o => o.Selection == selection && o.CapturedAt <= match.MatchDate)
+                    .OrderByDescending(o => o.CapturedAt)
+                    .FirstOrDefault();
+                row.Add(closing is not null ? closing.ImpliedProbability.ToString(CultureInfo.InvariantCulture) : string.Empty);
+            }
 
             foreach (var featureName in FootballFeatureNames.All)
             {

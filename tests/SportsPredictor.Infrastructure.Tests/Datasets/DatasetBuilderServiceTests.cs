@@ -181,6 +181,59 @@ public class DatasetBuilderServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ExportDatasetCsvAsync_ClosingLineColumnsUseTheOddsSnapshotClosestToKickoff_NotTheAverage()
+    {
+        await SeedCompetitionAsync();
+        var kickoff = new DateTime(2024, 10, 1, 15, 0, 0, DateTimeKind.Utc);
+        var match = AddFinishedMatch(kickoff, _home, _away, 2, 1);
+        // Earlier snapshot (further from kickoff) — must NOT win.
+        _dbContext.OddsSnapshots.Add(new OddsSnapshot
+        {
+            MatchId = match.Id, Sportsbook = "Bet365", Market = "Match Winner", Selection = "Home",
+            DecimalOdds = 2.0m, ImpliedProbability = 0.50, CapturedAt = kickoff.AddDays(-5),
+        });
+        // Closest to kickoff (still before it) — must win.
+        _dbContext.OddsSnapshots.Add(new OddsSnapshot
+        {
+            MatchId = match.Id, Sportsbook = "Bet365", Market = "Match Winner", Selection = "Home",
+            DecimalOdds = 2.5m, ImpliedProbability = 0.40, CapturedAt = kickoff.AddHours(-1),
+        });
+        // After kickoff — must be ignored entirely (anti-leakage).
+        _dbContext.OddsSnapshots.Add(new OddsSnapshot
+        {
+            MatchId = match.Id, Sportsbook = "Bet365", Market = "Match Winner", Selection = "Home",
+            DecimalOdds = 10.0m, ImpliedProbability = 0.10, CapturedAt = kickoff.AddHours(1),
+        });
+        await _dbContext.SaveChangesAsync();
+        await _service.BuildFeaturesAsync(_tracked.Id, CancellationToken.None);
+
+        var csv = await _service.ExportDatasetCsvAsync(_tracked.Id, CancellationToken.None);
+
+        var headerCols = csv.Split('\n')[0].Split(',');
+        var closingHomeIndex = Array.IndexOf(headerCols, "closing_market_implied_home_prob");
+        Assert.True(closingHomeIndex >= 0, "closing_market_implied_home_prob column missing from CSV header");
+
+        var dataRow = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries)[1].Split(',');
+        Assert.Equal("0.4", dataRow[closingHomeIndex]);
+    }
+
+    [Fact]
+    public async Task ExportDatasetCsvAsync_ClosingLineColumnsBlankWhenNoOddsCaptured()
+    {
+        await SeedCompetitionAsync();
+        AddFinishedMatch(new DateTime(2024, 10, 1, 15, 0, 0, DateTimeKind.Utc), _home, _away, 1, 0);
+        await _dbContext.SaveChangesAsync();
+        await _service.BuildFeaturesAsync(_tracked.Id, CancellationToken.None);
+
+        var csv = await _service.ExportDatasetCsvAsync(_tracked.Id, CancellationToken.None);
+
+        var headerCols = csv.Split('\n')[0].Split(',');
+        var closingHomeIndex = Array.IndexOf(headerCols, "closing_market_implied_home_prob");
+        var dataRow = csv.Split('\n', StringSplitOptions.RemoveEmptyEntries)[1].Split(',');
+        Assert.Equal(string.Empty, dataRow[closingHomeIndex]);
+    }
+
+    [Fact]
     public async Task BuildFeaturesAsync_UnknownTrackedCompetition_ThrowsNotFound()
     {
         await Assert.ThrowsAsync<NotFoundException>(() => _service.BuildFeaturesAsync(Guid.NewGuid(), CancellationToken.None));

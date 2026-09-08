@@ -48,6 +48,17 @@ FEATURE_COLUMNS = [
 
 NON_FEATURE_COLUMNS = ["match_id", "match_date_utc", "home_team", "away_team", "home_score", "away_score", "result"]
 
+# Optional benchmark-only columns (evaluation/benchmarks.py's closing_line_benchmark) —
+# not model features (deliberately excluded from FEATURE_COLUMNS) and deliberately NOT
+# part of load_dataset's required-columns check below, so CSVs without them (older
+# exports, synthetic test data) still load fine — closing_line_benchmark itself
+# tolerates their absence by returning None.
+CLOSING_LINE_COLUMNS = [
+    "closing_market_implied_home_prob",
+    "closing_market_implied_draw_prob",
+    "closing_market_implied_away_prob",
+]
+
 RESULT_CLASSES = ["H", "D", "A"]
 
 

@@ -20,6 +20,32 @@ si usas el lanzador WPF/instalador) — nunca en un archivo commiteado. Tu plan
 es PRO, pero el software lee los límites reales desde los headers de
 API-Football, nunca los hardcodea.
 
+### Validar los DTOs contra una respuesta real (pendiente — requiere tu key)
+
+Los DTOs de `ExternalProviders/ApiFootball/Models/` (countries, leagues,
+teams, fixtures, standings, injuries, lineups, odds, predictions) nunca se
+probaron contra una respuesta real de API-Football — se desarrollaron sin
+key disponible. No hace falta un script nuevo: con `API_FOOTBALL_KEY`
+configurada, corré esta secuencia una vez (todos son endpoints que ya
+existen) y prestá atención a cualquier `null`/`0`/campo vacío inesperado en
+lo que quede persistido, o a un 502 (`ApiFootballException`) que indicaría
+un DTO que no matchea la forma real de la respuesta:
+
+1. `POST /api/data-sources/api-football/test` — conectividad básica.
+2. `POST /api/tracked-competitions` con una liga/temporada real, luego
+   `POST /{id}/sync-teams` y `POST /{id}/sync-fixtures`.
+3. Para un fixture ya sincronizado: `POST /api/matches/{id}/sync-lineups`,
+   `.../sync-odds`, `.../sync-prediction`.
+4. `POST /api/tracked-competitions/{id}/sync-standings` y
+   `.../sync-injuries`.
+5. Revisar en SQLite (`database/sportspredictor.db`) las tablas `Team`,
+   `Match`, `StandingSnapshot`, `InjurySnapshot`, `LineupSnapshot`,
+   `OddsSnapshot`, `ApiFootballPredictionSnapshot` — comparar contra la
+   respuesta cruda de API-Football para esos mismos endpoints (Postman/curl)
+   y anotar cualquier discrepancia como issue.
+
+No lo marco como "hecho" en este roadmap hasta que se corra con una key real.
+
 ## Estado del proyecto
 
 **Fases 1-14 completadas** (de las 18 de `CLAUDE.md`; ver excepciones abajo):

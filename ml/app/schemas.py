@@ -95,6 +95,10 @@ class BacktestSummaryResponse(BaseModel):
 
 class EvaluateFootball1X2Response(BaseModel):
     calibration: CalibrationReportResponse
+    # Isotonic-calibrated version of the same selected algorithm, for side-by-side
+    # comparison against `calibration` — null when the selected algorithm is
+    # "Ensemble" (not calibratable, see evaluation/calibration.py).
+    calibration_after_isotonic: CalibrationReportResponse | None = None
     backtest: BacktestSummaryResponse
     benchmarks: list[BenchmarkResultResponse]
     dataset_size: int

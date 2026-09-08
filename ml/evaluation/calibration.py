@@ -1,8 +1,7 @@
 """
 Calibration (CLAUDE.md section 26): reliability diagram data + Expected Calibration
-Error (ECE) for the model's top predicted class. Isotonic regression / Platt scaling
-(actually recalibrating the model) are not implemented yet — only measuring how
-calibrated the raw model already is. See docs/football-model.md for scope notes.
+Error (ECE) for the model's top predicted class, plus (below) an isotonic-calibrated
+comparison. See docs/football-model.md for scope notes.
 """
 
 from __future__ import annotations
@@ -10,6 +9,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
+import pandas as pd
+from sklearn.base import clone
+from sklearn.calibration import CalibratedClassifierCV
+
+from training import football_1x2
+from training.dataset import prepare_features
 
 
 @dataclass
@@ -56,3 +61,33 @@ def compute_calibration_report(y_true_idx: np.ndarray, probabilities: np.ndarray
         weighted_error += (count / total) * abs(predicted_mean - actual_frequency)
 
     return CalibrationReport(expected_calibration_error=weighted_error, bins=bins)
+
+
+def fit_and_compare_isotonic(df: pd.DataFrame, summary: "football_1x2.TrainingSummary") -> CalibrationReport | None:
+    """
+    Fits an isotonic-calibrated version of the same algorithm class train_and_select
+    selected — fresh, 3-fold cross-validated on the training fold only (never touching
+    the test fold), so this stays purely diagnostic like the rest of /evaluate — and
+    reports its calibration error on the same test fold compute_calibration_report
+    already scores the raw model on, for a side-by-side comparison.
+
+    Returns None when the selected algorithm is "Ensemble": AveragingEnsemble is a
+    plain averaging wrapper, not a real sklearn estimator (no get_params/set_params),
+    so sklearn.base.clone can't produce a fresh copy of it to calibrate.
+    """
+    if hasattr(summary.model, "members"):
+        return None
+
+    x, y = prepare_features(df)
+    x_train, x_test, y_train, y_test = football_1x2._chronological_split(x, y)
+    y_train_idx = y_train.map(football_1x2.LABEL_TO_INDEX).to_numpy()
+    y_test_idx = y_test.map(football_1x2.LABEL_TO_INDEX).to_numpy()
+
+    x_train_scaled = summary.scaler.transform(x_train)
+    x_test_scaled = summary.scaler.transform(x_test)
+
+    calibrated = CalibratedClassifierCV(clone(summary.model), method="isotonic", cv=3)
+    calibrated.fit(x_train_scaled, y_train_idx)
+
+    calibrated_probabilities = calibrated.predict_proba(x_test_scaled)
+    return compute_calibration_report(y_test_idx, calibrated_probabilities)

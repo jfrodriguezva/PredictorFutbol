@@ -4,13 +4,12 @@ Benchmarks (CLAUDE.md section 27): a model is only worth using if it beats these
 Implemented here (achievable with current data):
   1. Always pick the favorite (highest market-implied probability).
   2. The bookmaker's own implied probabilities, used directly as "the model".
+  3. The closing line (odds captured closest to kickoff, distinct from the averaged
+     market_implied_*_prob features) — the hardest of the three to beat.
 
 NOT implemented yet, deliberately (see docs/football-model.md):
   - Elo: no Elo rating feature/tracker exists yet (CLAUDE.md section 22 feature,
     not built — would need its own historical computation across all matches).
-  - True opening-vs-closing line comparison: the Dataset Builder's
-    market_implied_*_prob features are an average across bookmakers/snapshots, not
-    specifically the closing line. Distinguishing "closing" needs a dedicated feature.
   - API-Football's own predictions: only meaningful once ApiFootballPredictionSnapshot
     rows exist for the matches in a given dataset; wire this in when there is real
     ApiFootballPredictionSnapshot data to join against.
@@ -28,6 +27,11 @@ from training.dataset import RESULT_CLASSES
 from training.football_1x2 import multiclass_brier_score
 
 MARKET_PROB_COLUMNS = ["market_implied_home_prob", "market_implied_draw_prob", "market_implied_away_prob"]
+CLOSING_MARKET_PROB_COLUMNS = [
+    "closing_market_implied_home_prob",
+    "closing_market_implied_draw_prob",
+    "closing_market_implied_away_prob",
+]
 LABEL_TO_INDEX = {label: i for i, label in enumerate(RESULT_CLASSES)}
 
 
@@ -73,3 +77,22 @@ def bookmaker_implied_benchmark(df: pd.DataFrame) -> BenchmarkResult:
     probabilities = _market_probabilities(df)
     y_true_idx = df["result"].map(LABEL_TO_INDEX).to_numpy()
     return _score("bookmaker_implied", y_true_idx, probabilities)
+
+
+def closing_line_benchmark(df: pd.DataFrame) -> BenchmarkResult | None:
+    """
+    The market's own implied probabilities captured closest to kickoff — as opposed to
+    `bookmaker_implied_benchmark`'s average across the whole pre-kickoff window — and
+    the hardest benchmark to beat, since it reflects all information available right
+    before the match. Returns None (rather than raising) when the dataset doesn't have
+    these columns, e.g. CSVs exported before this benchmark existed, or synthetic test
+    data — callers should skip reporting it in that case.
+    """
+    if not all(col in df.columns for col in CLOSING_MARKET_PROB_COLUMNS):
+        return None
+
+    raw = df[CLOSING_MARKET_PROB_COLUMNS].fillna(1.0 / 3.0).to_numpy()
+    raw = np.clip(raw, 1e-6, None)
+    probabilities = raw / raw.sum(axis=1, keepdims=True)
+    y_true_idx = df["result"].map(LABEL_TO_INDEX).to_numpy()
+    return _score("closing_line", y_true_idx, probabilities)

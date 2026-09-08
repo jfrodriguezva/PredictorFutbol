@@ -30,3 +30,23 @@ def test_market_probabilities_normalize_to_one_per_match():
 
     row_sums = probs.sum(axis=1)
     assert all(abs(s - 1.0) < 1e-6 for s in row_sums)
+
+
+def test_closing_line_benchmark_returns_none_without_closing_columns():
+    df = load_dataset(_synthetic_csv(20))
+
+    assert benchmarks.closing_line_benchmark(df) is None
+
+
+def test_closing_line_benchmark_returns_metrics_when_columns_present():
+    df = load_dataset(_synthetic_csv(60))
+    df["closing_market_implied_home_prob"] = df["market_implied_home_prob"]
+    df["closing_market_implied_draw_prob"] = df["market_implied_draw_prob"]
+    df["closing_market_implied_away_prob"] = df["market_implied_away_prob"]
+
+    result = benchmarks.closing_line_benchmark(df)
+
+    assert result is not None
+    assert result.name == "closing_line"
+    assert 0.0 <= result.accuracy <= 1.0
+    assert result.log_loss >= 0.0

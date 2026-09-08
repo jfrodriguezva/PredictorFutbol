@@ -1,7 +1,10 @@
 import numpy as np
 import pytest
 
-from evaluation.calibration import compute_calibration_report
+from evaluation.calibration import compute_calibration_report, fit_and_compare_isotonic
+from tests.test_football_1x2_training import _synthetic_csv
+from training import football_1x2
+from training.dataset import load_dataset
 
 
 def test_perfectly_calibrated_predictions_have_zero_error():
@@ -39,3 +42,24 @@ def test_bins_cover_only_populated_ranges():
 
     assert len(report.bins) == 1
     assert report.bins[0].count == 10
+
+
+def test_fit_and_compare_isotonic_returns_a_report_for_a_calibratable_algorithm():
+    df = load_dataset(_synthetic_csv(80))
+    summary = football_1x2.train_and_select(df)
+    if hasattr(summary.model, "members"):
+        pytest.skip("Ensemble was selected for this seed — not calibratable, see next test.")
+
+    report = fit_and_compare_isotonic(df, summary)
+
+    assert report is not None
+    assert report.expected_calibration_error >= 0.0
+
+
+def test_fit_and_compare_isotonic_returns_none_for_ensemble():
+    df = load_dataset(_synthetic_csv(80))
+    summary = football_1x2.train_and_select(df)
+    # Force the Ensemble path regardless of which algorithm actually won on this seed.
+    summary.model = football_1x2.AveragingEnsemble([summary.model])
+
+    assert fit_and_compare_isotonic(df, summary) is None
