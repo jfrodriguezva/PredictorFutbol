@@ -8,6 +8,7 @@ using SportsPredictor.Application.ExternalData;
 using SportsPredictor.Application.MlService;
 using SportsPredictor.Application.Matches;
 using SportsPredictor.Application.ModelRegistry;
+using SportsPredictor.Application.Notifications;
 using SportsPredictor.Application.Predictions;
 using SportsPredictor.Application.Progol;
 using SportsPredictor.Application.ReferenceData;
@@ -47,6 +48,8 @@ public static class DependencyInjection
         services.AddSingleton<IAnalysisRateLimiter, AnalysisRateLimiter>();
         services.AddScoped<IMatchQueryService, MatchQueryService>();
         services.AddSingleton<IProgolOptimizer, ProgolOptimizer>();
+        services.AddScoped<IValueBetNotificationService, ValueBetNotificationService>();
+        services.AddHostedService<ValueBetWatcherBackgroundService>();
 
         AddApiFootball(services, configuration);
         AddMlService(services, configuration);

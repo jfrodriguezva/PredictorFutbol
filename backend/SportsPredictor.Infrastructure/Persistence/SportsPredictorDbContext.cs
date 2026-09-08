@@ -22,6 +22,7 @@ public class SportsPredictorDbContext : DbContext
     public DbSet<ModelVersion> ModelVersions => Set<ModelVersion>();
     public DbSet<Prediction> Predictions => Set<Prediction>();
     public DbSet<PredictionExplanation> PredictionExplanations => Set<PredictionExplanation>();
+    public DbSet<ValueBetNotification> ValueBetNotifications => Set<ValueBetNotification>();
     public DbSet<TrainingRun> TrainingRuns => Set<TrainingRun>();
     public DbSet<FeatureValue> FeatureValues => Set<FeatureValue>();
     public DbSet<TrackedCompetition> TrackedCompetitions => Set<TrackedCompetition>();

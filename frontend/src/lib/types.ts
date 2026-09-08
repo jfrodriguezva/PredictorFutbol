@@ -93,6 +93,16 @@ export interface PredictionExplanation {
   narrative: string;
 }
 
+export interface ValueBetNotification {
+  id: string;
+  matchId: string;
+  predictionId: string;
+  selection: string;
+  expectedValue: number;
+  detectedAt: string;
+  read: boolean;
+}
+
 export interface AccuracySummary {
   totalEvaluated: number;
   correctCount: number;

@@ -74,6 +74,17 @@ especificación original):
 - Puertos fijos: API C# `20050`, Next.js `20051`, servicio ML `8001`.
 - **Endpoint de análisis "experto"** (`POST /api/predictions/{matchId}/analyze`,
   `GET /api/predictions/{matchId}/analysis`) — ver la sección siguiente.
+- **Activar una versión de modelo** (`POST /api/model-versions/{id}/activate`) —
+  fuerza qué `ModelVersion` usan `/generate` y `/analyze`; sin activar
+  ninguna, se sigue usando "la más reciente entrenada" (comportamiento
+  anterior, sin cambios).
+- **Scheduler mínimo + notificaciones in-app**: `ValueBetWatcherBackgroundService`
+  corre cada 15 min, genera predicciones para partidos `Scheduled` (próximos
+  7 días) de competiciones trackeadas que aún no tengan una, y publica un
+  value bet detectado en `GET /api/notifications/value-bets` (campana 🔔 en
+  el navbar del dashboard). **No sincroniza fixtures/odds automáticamente**
+  — solo reacciona a partidos ya presentes en SQLite; el "MegaSyncJob"
+  completo (sección 14 de `CLAUDE.md`) sigue fuera de alcance a propósito.
 
 Ver [docs/architecture.md](docs/architecture.md),
 [docs/database-schema.md](docs/database-schema.md),
