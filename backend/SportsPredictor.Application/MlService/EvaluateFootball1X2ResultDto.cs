@@ -21,6 +21,8 @@ public sealed record BacktestSummaryDto(
 /// </summary>
 public sealed record EvaluateFootball1X2ResultDto(
     CalibrationReportDto Calibration,
+    /// <summary>Null when the selected algorithm is "Ensemble" — not calibratable (see ml/evaluation/calibration.py).</summary>
+    CalibrationReportDto? CalibrationAfterIsotonic,
     BacktestSummaryDto Backtest,
     IReadOnlyList<BenchmarkResultDto> Benchmarks,
     int DatasetSize);

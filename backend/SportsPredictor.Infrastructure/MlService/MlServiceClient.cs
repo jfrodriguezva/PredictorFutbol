@@ -72,6 +72,11 @@ public sealed class MlServiceClient : IMlServiceClient
             Calibration: new CalibrationReportDto(
                 result.Calibration.ExpectedCalibrationError,
                 result.Calibration.Bins.Select(b => new CalibrationBinDto(b.BinLower, b.BinUpper, b.PredictedMean, b.ActualFrequency, b.Count)).ToList()),
+            CalibrationAfterIsotonic: result.CalibrationAfterIsotonic is { } calibrated
+                ? new CalibrationReportDto(
+                    calibrated.ExpectedCalibrationError,
+                    calibrated.Bins.Select(b => new CalibrationBinDto(b.BinLower, b.BinUpper, b.PredictedMean, b.ActualFrequency, b.Count)).ToList())
+                : null,
             Backtest: new BacktestSummaryDto(
                 result.Backtest.Windows.Select(w => new BacktestWindowDto(
                     w.WindowIndex, w.TrainSize, w.TestSize, w.Accuracy, w.PrecisionMacro, w.RecallMacro,

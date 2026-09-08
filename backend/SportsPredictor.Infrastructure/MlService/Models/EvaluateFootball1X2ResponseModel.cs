@@ -8,6 +8,9 @@ public sealed class EvaluateFootball1X2ResponseModel
     [JsonPropertyName("calibration")]
     public CalibrationReportModel Calibration { get; set; } = new();
 
+    [JsonPropertyName("calibration_after_isotonic")]
+    public CalibrationReportModel? CalibrationAfterIsotonic { get; set; }
+
     [JsonPropertyName("backtest")]
     public BacktestSummaryModel Backtest { get; set; } = new();
 

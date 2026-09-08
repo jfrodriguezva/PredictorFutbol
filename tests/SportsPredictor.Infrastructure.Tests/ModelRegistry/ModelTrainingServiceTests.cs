@@ -73,6 +73,7 @@ public class ModelTrainingServiceTests : IDisposable
             ReceivedCsv = csvContent;
             return Task.FromResult(new EvaluateFootball1X2ResultDto(
                 new CalibrationReportDto(0.05, new List<CalibrationBinDto>()),
+                null,
                 new BacktestSummaryDto(new List<BacktestWindowDto>(), 0, 0, 0, 0, 0, 0, 0),
                 new List<BenchmarkResultDto> { new("always_favorite", 1.0, 0.3, 0.4) },
                 100));
