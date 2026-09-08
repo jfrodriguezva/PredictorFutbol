@@ -145,6 +145,26 @@ public sealed class ModelTrainingService : IModelTrainingService
         return await _mlServiceClient.PredictGoalsAsync(csvContent, homeTeam.Name, awayTeam.Name, dixonColesRho, cancellationToken);
     }
 
+    public async Task<ModelVersionDto> ActivateAsync(Guid modelVersionId, CancellationToken cancellationToken)
+    {
+        var target = await _dbContext.ModelVersions.FindAsync([modelVersionId], cancellationToken)
+            ?? throw new NotFoundException(nameof(ModelVersion), modelVersionId);
+
+        var siblings = await _dbContext.ModelVersions
+            .Where(v => v.ModelName == target.ModelName && v.Id != target.Id && v.Active)
+            .ToListAsync(cancellationToken);
+
+        foreach (var sibling in siblings)
+        {
+            sibling.Active = false;
+        }
+
+        target.Active = true;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return ToDto(target);
+    }
+
     private static ModelVersionDto ToDto(ModelVersion version) => new(
         version.Id,
         version.ModelName,

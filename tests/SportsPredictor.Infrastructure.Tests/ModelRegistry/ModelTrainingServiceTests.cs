@@ -115,6 +115,29 @@ public class ModelTrainingServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ActivateAsync_MarksTargetActiveAndDeactivatesSiblingsOfSameModel()
+    {
+        var service = new ModelTrainingService(new FakeDatasetBuilderService(), new FakeMlServiceClient(), _dbContext);
+        var first = await service.TrainFootball1X2Async(Guid.NewGuid(), CancellationToken.None);
+        var second = await service.TrainFootball1X2Async(Guid.NewGuid(), CancellationToken.None);
+
+        await service.ActivateAsync(first.Id, CancellationToken.None);
+        var afterActivatingSecond = await service.ActivateAsync(second.Id, CancellationToken.None);
+
+        Assert.True(afterActivatingSecond.Active);
+        Assert.False((await service.GetModelVersionsAsync(CancellationToken.None)).Single(v => v.Id == first.Id).Active);
+    }
+
+    [Fact]
+    public async Task ActivateAsync_UnknownId_ThrowsNotFound()
+    {
+        var service = new ModelTrainingService(new FakeDatasetBuilderService(), new FakeMlServiceClient(), _dbContext);
+
+        await Assert.ThrowsAsync<SportsPredictor.Application.Common.Exceptions.NotFoundException>(
+            () => service.ActivateAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
     public async Task TrainFootball1X2Async_CreatesTrainingRunLinkedToModelVersion()
     {
         var service = new ModelTrainingService(new FakeDatasetBuilderService(), new FakeMlServiceClient(), _dbContext);

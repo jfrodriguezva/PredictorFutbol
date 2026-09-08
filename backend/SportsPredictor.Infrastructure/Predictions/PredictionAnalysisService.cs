@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SportsPredictor.Application.Common.Exceptions;
+using SportsPredictor.Application.Common.Interfaces;
 using SportsPredictor.Application.Datasets;
 using SportsPredictor.Application.MlService;
 using SportsPredictor.Application.Predictions;
@@ -22,22 +23,32 @@ public sealed class PredictionAnalysisService : IPredictionAnalysisService
     private const string Market = "Match Winner";
     private const string ModelName = "football_1x2";
 
+    private static readonly TimeSpan NarrativeCacheTtl = TimeSpan.FromMinutes(15);
+
     private readonly SportsPredictorDbContext _dbContext;
     private readonly IDatasetBuilderService _datasetBuilderService;
     private readonly IMlServiceClient _mlServiceClient;
+    private readonly ICacheService _cacheService;
+    private readonly IAnalysisRateLimiter _rateLimiter;
 
     public PredictionAnalysisService(
         SportsPredictorDbContext dbContext,
         IDatasetBuilderService datasetBuilderService,
-        IMlServiceClient mlServiceClient)
+        IMlServiceClient mlServiceClient,
+        ICacheService cacheService,
+        IAnalysisRateLimiter rateLimiter)
     {
         _dbContext = dbContext;
         _datasetBuilderService = datasetBuilderService;
         _mlServiceClient = mlServiceClient;
+        _cacheService = cacheService;
+        _rateLimiter = rateLimiter;
     }
 
     public async Task<PredictionExplanationDto> AnalyzeMatchAsync(Guid matchId, Guid? modelVersionId, CancellationToken cancellationToken)
     {
+        _rateLimiter.Check(matchId);
+
         var match = await _dbContext.Matches
             .Include(m => m.Competition)
             .Include(m => m.Season)
@@ -50,7 +61,8 @@ public sealed class PredictionAnalysisService : IPredictionAnalysisService
             ? await _dbContext.ModelVersions.FindAsync([id], cancellationToken) ?? throw new NotFoundException(nameof(ModelVersion), id)
             : await _dbContext.ModelVersions
                 .Where(m => m.ModelName == ModelName)
-                .OrderByDescending(m => m.TrainedAt)
+                .OrderByDescending(m => m.Active)
+                .ThenByDescending(m => m.TrainedAt)
                 .FirstOrDefaultAsync(cancellationToken)
               ?? throw new InvalidOperationException($"No '{ModelName}' ModelVersion exists yet — train one first (POST .../train-football-1x2/{{trackedCompetitionId}}).");
 
@@ -69,7 +81,16 @@ public sealed class PredictionAnalysisService : IPredictionAnalysisService
 
         var odds = await ResolveOddsAsync(matchId, cancellationToken);
 
-        var result = await _mlServiceClient.AnalyzeFootball1X2Async(modelVersion.ArtifactPath, features, fixture, odds, cancellationToken);
+        // Keyed on everything that can change the ML service's answer (match, model
+        // version, and the exact odds used for Kelly staking) — a repeat call with the
+        // same inputs reuses the cached SHAP+narrative instead of paying for Claude
+        // again. A new PredictionExplanation snapshot is still persisted below either way.
+        var cacheKey = $"analysis:{matchId}:{modelVersion.Id}:{odds?.Home}:{odds?.Draw}:{odds?.Away}";
+        var result = await _cacheService.GetOrCreateAsync(
+            cacheKey,
+            ct => _mlServiceClient.AnalyzeFootball1X2Async(modelVersion.ArtifactPath, features, fixture, odds, ct),
+            NarrativeCacheTtl,
+            cancellationToken);
 
         var shapFeatures = result.ShapTopFeatures.Select(f => new ShapFeatureDto(f.Feature, f.Impact)).ToList();
         var stakes = result.Stakes?.ToDictionary(
@@ -104,17 +125,17 @@ public sealed class PredictionAnalysisService : IPredictionAnalysisService
             .OrderByDescending(e => e.GeneratedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (entity is null)
-        {
-            return null;
-        }
+        return entity is null ? null : ToDto(entity);
+    }
 
-        var shapFeatures = JsonSerializer.Deserialize<List<ShapFeatureDto>>(entity.ShapTopFeaturesJson) ?? [];
-        var stakes = entity.StakesJson is not null
-            ? JsonSerializer.Deserialize<Dictionary<string, StakeDto>>(entity.StakesJson)
-            : null;
+    public async Task<IReadOnlyList<PredictionExplanationDto>> GetAnalysisHistoryForMatchAsync(Guid matchId, CancellationToken cancellationToken)
+    {
+        var entities = await _dbContext.PredictionExplanations
+            .Where(e => e.MatchId == matchId)
+            .OrderByDescending(e => e.GeneratedAt)
+            .ToListAsync(cancellationToken);
 
-        return ToDto(entity, shapFeatures, stakes);
+        return entities.Select(ToDto).ToList();
     }
 
     /// <summary>Latest odds per selection for this match, only when all three (Home/Draw/Away) are available — Kelly staking needs a complete market, not a partial one.</summary>
@@ -142,4 +163,13 @@ public sealed class PredictionAnalysisService : IPredictionAnalysisService
             entity.Id, entity.MatchId, entity.ModelVersionId, entity.GeneratedAt,
             entity.ProbabilityHome, entity.ProbabilityDraw, entity.ProbabilityAway,
             shapFeatures, stakes, entity.NarrativeText);
+
+    private static PredictionExplanationDto ToDto(PredictionExplanation entity)
+    {
+        var shapFeatures = JsonSerializer.Deserialize<List<ShapFeatureDto>>(entity.ShapTopFeaturesJson) ?? [];
+        var stakes = entity.StakesJson is not null
+            ? JsonSerializer.Deserialize<Dictionary<string, StakeDto>>(entity.StakesJson)
+            : null;
+        return ToDto(entity, shapFeatures, stakes);
+    }
 }

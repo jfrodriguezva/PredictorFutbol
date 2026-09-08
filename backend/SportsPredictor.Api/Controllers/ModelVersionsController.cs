@@ -100,6 +100,26 @@ public sealed class ModelVersionsController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Marks this version as the one GeneratePrediction1X2Async/AnalyzeMatchAsync should
+    /// use, deactivating any other version of the same model. Without ever calling this,
+    /// both fall back to "most recently trained" (unchanged prior behavior).
+    /// </summary>
+    [HttpPost("{id:guid}/activate")]
+    [ProducesResponseType(typeof(ModelVersionDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Activate(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _modelTrainingService.ActivateAsync(id, cancellationToken);
+            return Ok(result);
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(new { ex.Message });
+        }
+    }
+
     /// <summary>Phase 11: Expected Goals (Poisson/Dixon-Coles) for a hypothetical fixture. Diagnostic only, persists nothing.</summary>
     [HttpPost("predict-goals/{trackedCompetitionId:guid}")]
     [ProducesResponseType(typeof(PredictGoalsResultDto), StatusCodes.Status200OK)]

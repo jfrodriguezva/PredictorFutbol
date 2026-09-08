@@ -13,4 +13,7 @@ public interface IPredictionAnalysisService
 
     /// <summary>Most recent analysis already generated for this match, or null if none exists yet.</summary>
     Task<PredictionExplanationDto?> GetLatestAnalysisForMatchAsync(Guid matchId, CancellationToken cancellationToken);
+
+    /// <summary>Every analysis snapshot generated for this match, most recent first.</summary>
+    Task<IReadOnlyList<PredictionExplanationDto>> GetAnalysisHistoryForMatchAsync(Guid matchId, CancellationToken cancellationToken);
 }

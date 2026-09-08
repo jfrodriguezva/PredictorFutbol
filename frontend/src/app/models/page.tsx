@@ -9,6 +9,7 @@ export default function ModelsPage() {
   const [competitions, setCompetitions] = useState<TrackedCompetition[]>([]);
   const [selectedCompetition, setSelectedCompetition] = useState("");
   const [training, setTraining] = useState(false);
+  const [activatingId, setActivatingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function loadModels() {
@@ -38,6 +39,19 @@ export default function ModelsPage() {
       setError(err instanceof ApiError ? err.message : "Training failed.");
     } finally {
       setTraining(false);
+    }
+  }
+
+  async function handleActivate(id: string) {
+    setActivatingId(id);
+    setError(null);
+    try {
+      await apiPost(`/api/model-versions/${id}/activate`);
+      await loadModels();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to activate this model version.");
+    } finally {
+      setActivatingId(null);
     }
   }
 
@@ -90,6 +104,7 @@ export default function ModelsPage() {
                 <th>Brier</th>
                 <th>Log Loss</th>
                 <th>Trained</th>
+                <th>Active</th>
               </tr>
             </thead>
             <tbody>
@@ -100,6 +115,19 @@ export default function ModelsPage() {
                   <td>{m.brierScore?.toFixed(4) ?? "–"}</td>
                   <td>{m.logLoss?.toFixed(4) ?? "–"}</td>
                   <td>{new Date(m.trainedAt).toLocaleString()}</td>
+                  <td>
+                    {m.active ? (
+                      <span className="text-xs font-medium text-green-700 dark:text-green-400">✓ Active</span>
+                    ) : (
+                      <button
+                        onClick={() => handleActivate(m.id)}
+                        disabled={activatingId === m.id}
+                        className="rounded border border-neutral-300 px-2 py-1 text-xs disabled:opacity-50 dark:border-neutral-700"
+                      >
+                        {activatingId === m.id ? "Activating…" : "Activate"}
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -128,6 +128,10 @@ public sealed class PredictionsController : ControllerBase
         {
             return Problem(statusCode: StatusCodes.Status502BadGateway, title: "ML service request failed", detail: ex.Message);
         }
+        catch (RateLimitExceededException ex)
+        {
+            return Problem(statusCode: StatusCodes.Status429TooManyRequests, title: "Too many analysis requests", detail: ex.Message);
+        }
     }
 
     /// <summary>The most recently generated analysis for this match, or 404 if Analyze has never been called for it.</summary>
@@ -137,6 +141,15 @@ public sealed class PredictionsController : ControllerBase
     {
         var result = await _predictionAnalysisService.GetLatestAnalysisForMatchAsync(matchId, cancellationToken);
         return result is not null ? Ok(result) : NotFound();
+    }
+
+    /// <summary>Every analysis snapshot generated for this match, most recent first.</summary>
+    [HttpGet("{matchId:guid}/analyses")]
+    [ProducesResponseType(typeof(IReadOnlyList<PredictionExplanationDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAnalysisHistory(Guid matchId, CancellationToken cancellationToken)
+    {
+        var result = await _predictionAnalysisService.GetAnalysisHistoryForMatchAsync(matchId, cancellationToken);
+        return Ok(result);
     }
 
     public sealed record LearnFromMatchResultDto(EvaluateMatchResultDto Evaluation, ModelVersionDto NewModelVersion);

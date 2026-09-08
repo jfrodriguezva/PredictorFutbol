@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { apiGet, apiPost, ApiError } from "@/lib/api";
 import type { GeneratePredictionResult, LearnFromMatchResult, Match, Prediction, PredictionExplanation } from "@/lib/types";
 
@@ -18,6 +19,7 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
   const [match, setMatch] = useState<Match | null>(null);
   const [predictions, setPredictions] = useState<Prediction[] | null>(null);
   const [analysis, setAnalysis] = useState<PredictionExplanation | null>(null);
+  const [analysisHistory, setAnalysisHistory] = useState<PredictionExplanation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -53,11 +55,20 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
     }
   }
 
+  async function loadAnalysisHistory() {
+    try {
+      setAnalysisHistory(await apiGet<PredictionExplanation[]>(`/api/predictions/${id}/analyses`));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not reach the backend.");
+    }
+  }
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional fetch-on-mount
     loadMatch();
     loadPredictions();
     loadAnalysis();
+    loadAnalysisHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -130,12 +141,15 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
     try {
       const result = await apiPost<PredictionExplanation>(`/api/predictions/${id}/analyze`);
       setAnalysis(result);
+      await loadAnalysisHistory();
     } catch (err) {
       setError(
         err instanceof ApiError
           ? err.status === 409
             ? "No trained model exists yet — train one from the Models page first."
-            : err.message
+            : err.status === 429
+              ? "Too many analysis requests for this match — try again in a few minutes."
+              : err.message
           : "Failed to analyze this match.",
       );
     } finally {
@@ -266,17 +280,24 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
           </p>
 
           <h3 className="mt-4 text-sm font-medium text-neutral-700 dark:text-neutral-300">Features más relevantes (SHAP)</h3>
-          <ul className="mt-2 space-y-1 text-sm">
-            {analysis.shapTopFeatures.map((f) => (
-              <li key={f.feature} className="flex justify-between border-b border-neutral-100 py-1 dark:border-neutral-900">
-                <span className="text-neutral-600 dark:text-neutral-400">{f.feature}</span>
-                <span className={f.impact >= 0 ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
-                  {f.impact >= 0 ? "+" : ""}
-                  {f.impact.toFixed(3)}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <div className="mt-2 h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={analysis.shapTopFeatures} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-neutral-200 dark:stroke-neutral-800" />
+                <XAxis type="number" tick={{ fontSize: 11 }} />
+                <YAxis type="category" dataKey="feature" width={150} tick={{ fontSize: 11 }} />
+                <Tooltip
+                  formatter={(value) => (typeof value === "number" ? value.toFixed(3) : value)}
+                  contentStyle={{ fontSize: 12 }}
+                />
+                <Bar dataKey="impact">
+                  {analysis.shapTopFeatures.map((f) => (
+                    <Cell key={f.feature} fill={f.impact >= 0 ? "#15803d" : "#dc2626"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
 
           {analysis.stakes && (
             <>
@@ -313,6 +334,39 @@ export default function MatchDetailPage({ params }: { params: Promise<{ id: stri
 
           <h3 className="mt-4 text-sm font-medium text-neutral-700 dark:text-neutral-300">Narrativa</h3>
           <div className="mt-2 whitespace-pre-wrap text-sm text-neutral-700 dark:text-neutral-300">{analysis.narrative}</div>
+        </div>
+      )}
+
+      {analysisHistory.length > 1 && (
+        <div className="mt-8">
+          <h2 className="text-lg font-medium">Historial de análisis</h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            Cada llamada a &quot;Analizar&quot; guarda un snapshot nuevo — los anteriores nunca se editan.
+          </p>
+          <table className="mt-3 w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-neutral-200 text-left dark:border-neutral-800">
+                <th className="py-2">Fecha</th>
+                <th>H</th>
+                <th>D</th>
+                <th>A</th>
+                <th>Narrativa</th>
+              </tr>
+            </thead>
+            <tbody>
+              {analysisHistory.map((a) => (
+                <tr key={a.id} className="border-b border-neutral-100 align-top dark:border-neutral-900">
+                  <td className="py-2 whitespace-nowrap">{new Date(a.generatedAt).toLocaleString()}</td>
+                  <td>{pct(a.home)}</td>
+                  <td>{pct(a.draw)}</td>
+                  <td>{pct(a.away)}</td>
+                  <td className="max-w-md truncate text-neutral-500" title={a.narrative}>
+                    {a.narrative.replace(/[#*_]/g, "").slice(0, 80)}…
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

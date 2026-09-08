@@ -31,4 +31,12 @@ public interface IModelTrainingService
     /// between two known teams. Purely diagnostic — nothing is persisted.
     /// </summary>
     Task<PredictGoalsResultDto> PredictGoalsAsync(Guid trackedCompetitionId, Guid homeTeamId, Guid awayTeamId, double? dixonColesRho, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Marks this ModelVersion as the one predictions should use, and deactivates every
+    /// other version with the same ModelName (at most one active version per model at a
+    /// time). Without ever calling this, generation/analysis fall back to "most recently
+    /// trained" — same as before this feature existed.
+    /// </summary>
+    Task<ModelVersionDto> ActivateAsync(Guid modelVersionId, CancellationToken cancellationToken);
 }

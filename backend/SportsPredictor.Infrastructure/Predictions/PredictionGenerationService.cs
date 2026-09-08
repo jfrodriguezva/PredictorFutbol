@@ -45,7 +45,8 @@ public sealed class PredictionGenerationService : IPredictionGenerationService
             ? await _dbContext.ModelVersions.FindAsync([id], cancellationToken) ?? throw new NotFoundException(nameof(ModelVersion), id)
             : await _dbContext.ModelVersions
                 .Where(m => m.ModelName == ModelName)
-                .OrderByDescending(m => m.TrainedAt)
+                .OrderByDescending(m => m.Active)
+                .ThenByDescending(m => m.TrainedAt)
                 .FirstOrDefaultAsync(cancellationToken)
               ?? throw new InvalidOperationException($"No '{ModelName}' ModelVersion exists yet — train one first (POST .../train-football-1x2/{{trackedCompetitionId}}).");
 
