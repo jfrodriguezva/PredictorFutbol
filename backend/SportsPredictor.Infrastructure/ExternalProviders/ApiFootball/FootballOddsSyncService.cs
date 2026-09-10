@@ -34,7 +34,15 @@ public sealed class FootballOddsSyncService : IFootballOddsSyncService
         }
 
         var envelope = await _client.GetOddsAsync(externalFixtureId, cancellationToken);
-        var capturedAt = DateTime.UtcNow;
+
+        // For a match still in the future, "now" genuinely is the pre-kickoff capture
+        // time. For a match already played, API-FOOTBALL's /odds only ever returns the
+        // frozen pre-match line (never live/in-play odds), but stamping it with "now"
+        // would date it AFTER kickoff — DatasetBuilderService's anti-leakage filter
+        // (CapturedAt <= match.MatchDate) would then silently discard it forever, no
+        // matter how real the data is. Backdating to the match's own kickoff time is
+        // the latest timestamp that's still honestly "no later than kickoff".
+        var capturedAt = DateTime.UtcNow > match.MatchDate ? match.MatchDate : DateTime.UtcNow;
         var snapshotsCreated = 0;
 
         foreach (var response in envelope.Response)

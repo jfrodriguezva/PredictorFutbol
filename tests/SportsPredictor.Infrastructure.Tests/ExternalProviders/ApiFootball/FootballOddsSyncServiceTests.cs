@@ -174,6 +174,43 @@ public class FootballOddsSyncServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SyncOddsAsync_MatchAlreadyPlayed_BackdatesCapturedAtToKickoff()
+    {
+        // Anti-leakage regression: DatasetBuilderService only ever considers odds with
+        // CapturedAt <= match.MatchDate. Backfilling odds for an already-played match
+        // days/weeks later with CapturedAt = "now" would silently make that data
+        // invisible to training forever, even though the odds themselves are real.
+        await SeedMatchAsync();
+        var kickoff = DateTime.UtcNow.AddDays(-10);
+        _match.MatchDate = kickoff;
+        _match.Status = MatchStatus.Finished;
+        _match.HomeScore = 1;
+        _match.AwayScore = 0;
+        await _dbContext.SaveChangesAsync();
+
+        var service = new FootballOddsSyncService(CreateClient(FakeHttpMessageHandler.Sequence(JsonResponse(OddsJson))), _dbContext);
+        var result = await service.SyncOddsAsync(_match.Id, CancellationToken.None);
+
+        Assert.Equal(kickoff, result.CapturedAtUtc);
+        Assert.All(_dbContext.OddsSnapshots, o => Assert.Equal(kickoff, o.CapturedAt));
+    }
+
+    [Fact]
+    public async Task SyncOddsAsync_UpcomingMatch_CapturedAtIsNow()
+    {
+        await SeedMatchAsync();
+        _match.MatchDate = DateTime.UtcNow.AddDays(5);
+        await _dbContext.SaveChangesAsync();
+        var before = DateTime.UtcNow;
+
+        var service = new FootballOddsSyncService(CreateClient(FakeHttpMessageHandler.Sequence(JsonResponse(OddsJson))), _dbContext);
+        await service.SyncOddsAsync(_match.Id, CancellationToken.None);
+
+        var after = DateTime.UtcNow;
+        Assert.All(_dbContext.OddsSnapshots, o => Assert.InRange(o.CapturedAt, before, after));
+    }
+
+    [Fact]
     public async Task SyncOddsAsync_UnknownMatch_ThrowsNotFound()
     {
         var service = new FootballOddsSyncService(CreateClient(FakeHttpMessageHandler.Sequence(JsonResponse(OddsJson))), _dbContext);
