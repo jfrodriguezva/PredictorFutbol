@@ -93,6 +93,29 @@ public class PredictionGenerationServiceTests : IDisposable
         return (match, modelVersion);
     }
 
+    /// <summary>Gives both teams in <paramref name="match"/> enough prior finished
+    /// matches to clear MinPriorMatchesForRecommendation, so tests can exercise the
+    /// "real" recommendation path instead of the insufficient-history gate.</summary>
+    private async Task SeedPriorHistoryAsync(Match match, int count = 5)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            _dbContext.Matches.Add(new Match
+            {
+                CompetitionId = match.CompetitionId,
+                SeasonId = match.SeasonId,
+                HomeTeamId = match.HomeTeamId,
+                AwayTeamId = match.AwayTeamId,
+                MatchDate = match.MatchDate.AddDays(-(i + 1) * 7),
+                Status = MatchStatus.Finished,
+                HomeScore = 1,
+                AwayScore = 0,
+            });
+        }
+
+        await _dbContext.SaveChangesAsync();
+    }
+
     [Fact]
     public async Task GeneratePrediction1X2Async_PersistsThreeSelectionRows()
     {
@@ -110,6 +133,7 @@ public class PredictionGenerationServiceTests : IDisposable
     public async Task GeneratePrediction1X2Async_WithFavorableOdds_RecommendsPositiveEvSelection()
     {
         var (match, modelVersion) = await SeedMatchAndModelAsync();
+        await SeedPriorHistoryAsync(match);
         // Model says Home 60%, but the market prices Home at decimal 2.5 (implied ~40%) — clear value.
         _dbContext.OddsSnapshots.Add(new OddsSnapshot
         {
@@ -130,6 +154,36 @@ public class PredictionGenerationServiceTests : IDisposable
         var home = result.Selections.Single(s => s.Selection == "Home");
         Assert.True(home.Recommended);
         Assert.True(home.ExpectedValue > 0);
+    }
+
+    [Fact]
+    public async Task GeneratePrediction1X2Async_InsufficientTeamHistory_NeverRecommendsDespitePositiveEv()
+    {
+        // Real case that surfaced this: a newly-tracked team with zero prior matches
+        // produced a "value bet" with a 394% edge against a perfectly sane real market
+        // price — the model's features for that team were mostly untrustworthy
+        // defaults, not a real signal. Deliberately do NOT call SeedPriorHistoryAsync
+        // here — same favorable-odds setup as the test above, but with zero history.
+        var (match, modelVersion) = await SeedMatchAndModelAsync();
+        _dbContext.OddsSnapshots.Add(new OddsSnapshot
+        {
+            MatchId = match.Id,
+            Sportsbook = "TestBook",
+            Market = "Match Winner",
+            Selection = "Home",
+            DecimalOdds = 2.5m,
+            ImpliedProbability = 0.4,
+            CapturedAt = DateTime.UtcNow,
+        });
+        await _dbContext.SaveChangesAsync();
+
+        var service = new PredictionGenerationService(_dbContext, new FakeDatasetBuilderService(), new FakeMlServiceClient());
+
+        var result = await service.GeneratePrediction1X2Async(match.Id, modelVersion.Id, CancellationToken.None);
+
+        var home = result.Selections.Single(s => s.Selection == "Home");
+        Assert.True(home.ExpectedValue > 0); // the edge is still computed and shown...
+        Assert.False(home.Recommended); // ...just never auto-recommended without enough history
     }
 
     [Fact]
@@ -236,6 +290,7 @@ public class PredictionGenerationServiceTests : IDisposable
     public async Task GetAccuracySummaryAsync_ComputesHitRateAndListsRecommendedMisses()
     {
         var (match, modelVersion) = await SeedMatchAndModelAsync();
+        await SeedPriorHistoryAsync(match);
         _dbContext.OddsSnapshots.Add(new OddsSnapshot
         {
             MatchId = match.Id,

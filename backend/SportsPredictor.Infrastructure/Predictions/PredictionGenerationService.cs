@@ -22,6 +22,15 @@ public sealed class PredictionGenerationService : IPredictionGenerationService
     private const string Market = "Match Winner";
     private const string ModelName = "football_1x2";
 
+    // A team with fewer prior finished matches on record than this has features that
+    // are mostly defaults (Elo=1500, rank/points/form=0/unknown) — the model's output
+    // for that match isn't a real signal, just noise dressed up as a probability. Real
+    // case that surfaced this: a newly-tracked team with zero history produced a
+    // "value bet" with a 394% edge against a perfectly sane real market price. Below
+    // this threshold, a selection is never auto-Recommended, even with positive EV —
+    // the raw probability/EV are still computed and shown, just not acted on.
+    private const int MinPriorMatchesForRecommendation = 5;
+
     private readonly SportsPredictorDbContext _dbContext;
     private readonly IDatasetBuilderService _datasetBuilderService;
     private readonly IMlServiceClient _mlServiceClient;
@@ -101,8 +110,11 @@ public sealed class PredictionGenerationService : IPredictionGenerationService
         }
 
         // Never recommend purely on favorite status (CLAUDE.md section 25) — only a
-        // genuinely positive-EV selection ever gets Recommended = true.
-        if (bestPositiveEvRow is not null && ExpectedValueCalculator.Categorize(bestEv) is ValueCategory.Value or ValueCategory.StrongValue)
+        // genuinely positive-EV selection ever gets Recommended = true. Also never
+        // recommend when either team's features are mostly untrustworthy defaults —
+        // see MinPriorMatchesForRecommendation.
+        if (bestPositiveEvRow is not null && ExpectedValueCalculator.Categorize(bestEv) is ValueCategory.Value or ValueCategory.StrongValue
+            && await BothTeamsHaveSufficientHistoryAsync(match, cancellationToken))
         {
             bestPositiveEvRow.Recommended = true;
         }
@@ -196,6 +208,23 @@ public sealed class PredictionGenerationService : IPredictionGenerationService
             RecommendedAccuracy: recommended.Count > 0 ? (double)recommendedCorrect / recommended.Count : 0.0,
             RecentMisses: recentMisses);
     }
+
+    private async Task<bool> BothTeamsHaveSufficientHistoryAsync(Match match, CancellationToken cancellationToken)
+    {
+        var homeCount = await CountPriorFinishedMatchesAsync(match.HomeTeamId, match.MatchDate, cancellationToken);
+        if (homeCount < MinPriorMatchesForRecommendation)
+        {
+            return false;
+        }
+
+        var awayCount = await CountPriorFinishedMatchesAsync(match.AwayTeamId, match.MatchDate, cancellationToken);
+        return awayCount >= MinPriorMatchesForRecommendation;
+    }
+
+    private Task<int> CountPriorFinishedMatchesAsync(Guid teamId, DateTime beforeUtc, CancellationToken cancellationToken) =>
+        _dbContext.Matches.CountAsync(
+            m => (m.HomeTeamId == teamId || m.AwayTeamId == teamId) && m.Status == MatchStatus.Finished && m.MatchDate < beforeUtc,
+            cancellationToken);
 
     private static PredictionDto ToDto(Prediction p) => new(
         p.Id, p.MatchId, p.ModelVersionId, p.PredictionDate, p.Market, p.Selection, p.Probability,
