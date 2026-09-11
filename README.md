@@ -20,31 +20,35 @@ si usas el lanzador WPF/instalador) — nunca en un archivo commiteado. Tu plan
 es PRO, pero el software lee los límites reales desde los headers de
 API-Football, nunca los hardcodea.
 
-### Validar los DTOs contra una respuesta real (pendiente — requiere tu key)
+### Validación de los DTOs contra una respuesta real — hecho
 
-Los DTOs de `ExternalProviders/ApiFootball/Models/` (countries, leagues,
-teams, fixtures, standings, injuries, lineups, odds, predictions) nunca se
-probaron contra una respuesta real de API-Football — se desarrollaron sin
-key disponible. No hace falta un script nuevo: con `API_FOOTBALL_KEY`
-configurada, corré esta secuencia una vez (todos son endpoints que ya
-existen) y prestá atención a cualquier `null`/`0`/campo vacío inesperado en
-lo que quede persistido, o a un 502 (`ApiFootballException`) que indicaría
-un DTO que no matchea la forma real de la respuesta:
+Corrido contra API-Football real (plan PRO) sobre las 15 competiciones con
+temporada activa. Resultado por endpoint:
 
-1. `POST /api/data-sources/api-football/test` — conectividad básica.
-2. `POST /api/tracked-competitions` con una liga/temporada real, luego
-   `POST /{id}/sync-teams` y `POST /{id}/sync-fixtures`.
-3. Para un fixture ya sincronizado: `POST /api/matches/{id}/sync-lineups`,
-   `.../sync-odds`, `.../sync-prediction`.
-4. `POST /api/tracked-competitions/{id}/sync-standings` y
-   `.../sync-injuries`.
-5. Revisar en SQLite (`database/sportspredictor.db`) las tablas `Team`,
-   `Match`, `StandingSnapshot`, `InjurySnapshot`, `LineupSnapshot`,
-   `OddsSnapshot`, `ApiFootballPredictionSnapshot` — comparar contra la
-   respuesta cruda de API-Football para esos mismos endpoints (Postman/curl)
-   y anotar cualquier discrepancia como issue.
-
-No lo marco como "hecho" en este roadmap hasta que se corra con una key real.
+- `GET /api/reference/countries`, `GET /api/reference/leagues` — OK, datos
+  reales, sin discrepancias.
+- `POST /api/tracked-competitions/{id}/sync-teams` (vía `sync-fixtures`,
+  que crea equipos nuevos al vuelo) — OK.
+- `POST /api/tracked-competitions/{id}/refresh-fixtures` — OK, ~421
+  fixtures reales sincronizados sin error en 15 competiciones.
+- `POST /api/matches/{id}/sync-odds` — OK, probado en 2,995 partidos reales
+  (285 Scheduled + 2,710 Finished) sin un solo error de parseo.
+- `POST /api/matches/{id}/sync-prediction` — OK, 285 partidos reales.
+- `POST /api/tracked-competitions/{id}/sync-standings` — OK.
+- `POST /api/matches/{id}/sync-lineups` — OK (devuelve 0 snapshots para
+  partidos lejanos en el tiempo, como se espera — las alineaciones recién
+  se publican cerca del kickoff).
+- **`POST /api/tracked-competitions/{id}/sync-injuries` — bug real
+  encontrado**: funciona con ligas chicas/sin lesiones activas (ej. Liga MX,
+  0 resultados), pero falla con `500`/`TaskCanceledException` en ligas
+  grandes con volumen real de lesiones (ej. Premier League) — el DTO en sí
+  parsea bien (no es un problema de forma de los datos), es
+  `FootballInjurySyncService.GetOrCreateMinimalPlayerAsync` haciendo un
+  lookup EF individual por jugador/equipo en un loop secuencial (patrón
+  N+1) que no escala al volumen real de una liga grande. **No arreglado
+  todavía** — requiere batchear los lookups (ej. cargar todos los
+  equipos/jugadores relevantes en un diccionario antes del loop, en vez de
+  una query por item).
 
 ## Estado del proyecto
 
